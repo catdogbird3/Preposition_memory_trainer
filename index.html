@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="zh-TW" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>介係詞記憶訓練器</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="/_sdk/data_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&amp;family=Space+Mono:wght@700&amp;display=swap" rel="stylesheet">
+  <style>
+    body {
+      box-sizing: border-box;
+      font-family: 'Noto Sans TC', sans-serif;
+    }
+    .mono-font {
+      font-family: 'Space Mono', monospace;
+    }
+    .prep-btn {
+      transition: all 0.2s ease;
+    }
+    .prep-btn:hover {
+      transform: translateY(-2px);
+    }
+    .prep-btn.correct {
+      animation: correctPulse 0.5s ease;
+    }
+    .prep-btn.wrong {
+      animation: wrongShake 0.4s ease;
+    }
+    @keyframes correctPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    @keyframes wrongShake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+    .card-flip {
+      perspective: 1000px;
+    }
+    .card-inner {
+      transition: transform 0.6s;
+      transform-style: preserve-3d;
+    }
+    .card-inner.flipped {
+      transform: rotateY(180deg);
+    }
+    .card-front, .card-back {
+      backface-visibility: hidden;
+    }
+    .card-back {
+      transform: rotateY(180deg);
+    }
+    .progress-ring {
+      transition: stroke-dashoffset 0.5s ease;
+    }
+    .fade-in {
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .streak-badge {
+      animation: badgePop 0.4s ease;
+    }
+    @keyframes badgePop {
+      0% { transform: scale(0); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+ </head>
+ <body class="h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white overflow-auto">
+  <div id="app" class="min-h-full w-full p-4 md:p-6"><!-- Header -->
+   <header class="text-center mb-6">
+    <h1 id="app-title" class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent mb-2">介係詞記憶訓練器</h1>
+    <p class="text-slate-400 text-sm">看到關鍵字，秒接介係詞！</p>
+   </header><!-- Stats Bar -->
+   <div class="flex justify-center gap-4 mb-6 flex-wrap">
+    <div class="bg-slate-800/50 rounded-xl px-4 py-2 flex items-center gap-2"><span class="text-2xl">🔥</span>
+     <div>
+      <div class="text-xs text-slate-400">
+       連續答對
+      </div>
+      <div id="streak" class="font-bold text-amber-400 mono-font">
+       0
+      </div>
+     </div>
+    </div>
+    <div class="bg-slate-800/50 rounded-xl px-4 py-2 flex items-center gap-2"><span class="text-2xl">✅</span>
+     <div>
+      <div class="text-xs text-slate-400">
+       正確率
+      </div>
+      <div id="accuracy" class="font-bold text-emerald-400 mono-font">
+       0%
+      </div>
+     </div>
+    </div>
+    <div class="bg-slate-800/50 rounded-xl px-4 py-2 flex items-center gap-2"><span class="text-2xl">📚</span>
+     <div>
+      <div class="text-xs text-slate-400">
+       已練習
+      </div>
+      <div id="practiced" class="font-bold text-sky-400 mono-font">
+       0
+      </div>
+     </div>
+    </div>
+   </div><!-- Mode Tabs -->
+   <div class="flex justify-center gap-2 mb-6"><button id="mode-quiz" class="px-4 py-2 rounded-lg font-medium transition-all bg-amber-500 text-slate-900"> 🎯 測驗模式 </button> <button id="mode-browse" class="px-4 py-2 rounded-lg font-medium transition-all bg-slate-700 text-slate-300 hover:bg-slate-600"> 📖 瀏覽模式 </button>
+   </div><!-- Quiz Mode -->
+   <div id="quiz-section" class="max-w-lg mx-auto"><!-- Question Card -->
+    <div class="card-flip mb-6">
+     <div id="quiz-card" class="card-inner relative h-48"><!-- Front -->
+      <div class="card-front absolute inset-0 bg-gradient-to-br from-slate-700 to-slate-800 rounded-2xl p-6 flex flex-col justify-center items-center shadow-xl border border-slate-600">
+       <div id="prep-category" class="text-xs text-amber-400 uppercase tracking-wider mb-2"></div>
+       <div id="question-word" class="text-3xl md:text-4xl font-bold text-white mb-2 text-center"></div>
+       <div id="question-blank" class="text-xl text-amber-400 mono-font">
+        ___?
+       </div>
+       <div id="question-hint" class="text-slate-400 text-sm mt-3"></div>
+      </div><!-- Back (Answer) -->
+      <div class="card-back absolute inset-0 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl p-6 flex flex-col justify-center items-center shadow-xl">
+       <div id="answer-word" class="text-2xl font-bold text-white mb-1"></div>
+       <div id="answer-prep" class="text-4xl font-bold text-amber-300 mono-font mb-2"></div>
+       <div id="answer-meaning" class="text-emerald-100"></div>
+      </div>
+     </div>
+    </div><!-- Answer Options -->
+    <div id="options-grid" class="grid grid-cols-3 gap-3 mb-6"><!-- Dynamically filled -->
+    </div><!-- Feedback -->
+    <div id="feedback" class="text-center mb-4 h-8"><!-- Feedback message -->
+    </div><!-- Next Button -->
+    <div class="text-center"><button id="next-btn" class="hidden px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold rounded-xl transition-all"> 下一題 → </button>
+    </div>
+   </div><!-- Browse Mode -->
+   <div id="browse-section" class="hidden max-w-4xl mx-auto"><!-- Prep Filter -->
+    <div class="flex flex-wrap justify-center gap-2 mb-6" id="prep-filters"><!-- Dynamically filled -->
+    </div><!-- Cards Grid -->
+    <div id="browse-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"><!-- Dynamically filled -->
+    </div>
+   </div><!-- Progress Section -->
+   <div class="mt-8 max-w-lg mx-auto">
+    <div class="bg-slate-800/50 rounded-xl p-4">
+     <h3 class="text-sm font-medium text-slate-400 mb-3">各介係詞掌握度</h3>
+     <div id="mastery-bars" class="space-y-2"><!-- Dynamically filled -->
+     </div>
+    </div>
+   </div>
+  </div>
+  <script>
+    // Preposition Data
+    const prepData = {
+      'OF': {
+        emoji: '📦',
+        hint: '…的／由…組成／有能力／贊成',
+        items: [
+          { id: 'consist_of', word: 'consist', meaning: '由…組成' },
+          { id: 'capable_of', word: 'be capable', meaning: '能夠' },
+          { id: 'aware_of', word: 'be aware', meaning: '意識到' },
+          { id: 'approve_of', word: 'approve', meaning: '贊成/認可' },
+          { id: 'remind_of', word: 'remind A', meaning: '提醒A關於B' },
+          { id: 'advantage_of', word: 'advantage', meaning: '…的優點' }
+        ]
+      },
+      'ON': {
+        emoji: '🎯',
+        hint: '依靠／專注／堅持／影響',
+        items: [
+          { id: 'depend_on', word: 'depend', meaning: '取決於' },
+          { id: 'focus_on', word: 'focus', meaning: '專注於' },
+          { id: 'insist_on', word: 'insist', meaning: '堅持' },
+          { id: 'impact_on', word: 'impact', meaning: '對…影響' },
+          { id: 'report_on', word: 'report', meaning: '關於…的報告' },
+          { id: 'update_on', word: 'update', meaning: '…的最新進度' }
+        ]
+      },
+      'TO': {
+        emoji: '➡️',
+        hint: '貢獻／解決／參考／回應／訂閱／適用',
+        items: [
+          { id: 'contribute_to', word: 'contribute', meaning: '貢獻於/促成' },
+          { id: 'lead_to', word: 'lead', meaning: '導致' },
+          { id: 'refer_to', word: 'refer', meaning: '提到/指的是' },
+          { id: 'respond_to', word: 'respond', meaning: '回覆/反應' },
+          { id: 'subscribe_to', word: 'subscribe', meaning: '訂閱' },
+          { id: 'apply_to', word: 'apply', meaning: '適用於' },
+          { id: 'solution_to', word: 'solution', meaning: '…的解決方案' },
+          { id: 'essential_to', word: 'essential', meaning: '對…很重要' },
+          { id: 'belong_to', word: 'belong', meaning: '屬於' },
+          { id: 'access_to', word: 'access', meaning: '存取/取得' }
+        ]
+      },
+      'WITH': {
+        emoji: '🤝',
+        hint: '遵守／熟悉／處理／一致／合規',
+        items: [
+          { id: 'comply_with', word: 'comply', meaning: '遵守' },
+          { id: 'familiar_with', word: 'be familiar', meaning: '熟悉' },
+          { id: 'deal_with', word: 'deal', meaning: '處理' },
+          { id: 'cope_with', word: 'cope', meaning: '應付' },
+          { id: 'satisfied_with', word: 'be satisfied', meaning: '對…滿意' },
+          { id: 'pleased_with', word: 'be pleased', meaning: '對…滿意' },
+          { id: 'accordance_with', word: 'in accordance', meaning: '依照' },
+          { id: 'compliance_with', word: 'compliance', meaning: '合規/符合' }
+        ]
+      },
+      'FOR': {
+        emoji: '🎁',
+        hint: '申請／道歉／等／需求／原因／排程',
+        items: [
+          { id: 'apply_for', word: 'apply', meaning: '申請' },
+          { id: 'apologize_for', word: 'apologize', meaning: '為…道歉' },
+          { id: 'wait_for', word: 'wait', meaning: '等待' },
+          { id: 'pay_for', word: 'pay', meaning: '付錢/付出代價' },
+          { id: 'search_for', word: 'search / look', meaning: '尋找' },
+          { id: 'demand_for', word: 'demand', meaning: '對…的需求' },
+          { id: 'reason_for', word: 'reason', meaning: '…的原因' },
+          { id: 'request_for', word: 'request', meaning: '…的請求' },
+          { id: 'schedule_for', word: 'schedule', meaning: '…的排程' },
+          { id: 'eligible_for', word: 'eligible', meaning: '有資格' }
+        ]
+      },
+      'IN': {
+        emoji: '📍',
+        hint: '專精／投資／參與／成功／增加／自豪',
+        items: [
+          { id: 'specialize_in', word: 'specialize', meaning: '專精於' },
+          { id: 'invest_in', word: 'invest', meaning: '投資於' },
+          { id: 'participate_in', word: 'participate', meaning: '參與' },
+          { id: 'engage_in', word: 'engage', meaning: '從事' },
+          { id: 'succeed_in', word: 'succeed', meaning: '成功做到' },
+          { id: 'increase_in', word: 'increase', meaning: '…的增加' },
+          { id: 'pride_in', word: 'take pride', meaning: '以…為榮' },
+          { id: 'confident_in', word: 'confident', meaning: '對…有信心' },
+          { id: 'interested_in', word: 'interested', meaning: '對…有興趣' }
+        ]
+      },
+      'FROM': {
+        emoji: '🚫',
+        hint: '防止／禁止：from + V-ing',
+        items: [
+          { id: 'prevent_from', word: 'prevent A', meaning: '防止A做…' },
+          { id: 'prohibit_from', word: 'prohibit A', meaning: '禁止A做…' },
+          { id: 'prohibited_from', word: 'be prohibited', meaning: '被禁止做…' }
+        ]
+      },
+      'ABOUT': {
+        emoji: '💭',
+        hint: '關切',
+        items: [
+          { id: 'concerned_about', word: 'be concerned', meaning: '擔心/關切' }
+        ]
+      },
+      'AGAINST': {
+        emoji: '🛡️',
+        hint: '防護',
+        items: [
+          { id: 'protection_against', word: 'protection', meaning: '防護…' }
+        ]
+      }
+    };
+
+    const allPreps = Object.keys(prepData);
+    
+    // State
+    let currentQuestion = null;
+    let streak = 0;
+    let totalCorrect = 0;
+    let totalAttempts = 0;
+    let practiceRecords = [];
+    let currentMode = 'quiz';
+    let selectedPrepFilter = 'ALL';
+    let isAnswered = false;
+
+    // Config
+    const defaultConfig = {
+      app_title: '介係詞記憶訓練器',
+      background_color: '#0f172a',
+      surface_color: '#334155',
+      text_color: '#f8fafc',
+      primary_action_color: '#f59e0b',
+      secondary_action_color: '#64748b'
+    };
+
+    // Get all items flattened
+    function getAllItems() {
+      const items = [];
+      for (const [prep, data] of Object.entries(prepData)) {
+        for (const item of data.items) {
+          items.push({ ...item, prep, emoji: data.emoji, hint: data.hint });
+        }
+      }
+      return items;
+    }
+
+    // Get record for item
+    function getRecord(itemId) {
+      return practiceRecords.find(r => r.collocation_id === itemId);
+    }
+
+    // Calculate mastery for a prep
+    function getPrepMastery(prep) {
+      const items = prepData[prep].items;
+      let totalScore = 0;
+      let count = 0;
+      
+      for (const item of items) {
+        const record = getRecord(item.id);
+        if (record && (record.correct_count + record.wrong_count) > 0) {
+          const accuracy = record.correct_count / (record.correct_count + record.wrong_count);
+          totalScore += accuracy;
+          count++;
+        }
+      }
+      
+      return count > 0 ? Math.round((totalScore / count) * 100) : 0;
+    }
+
+    // Pick next question (weighted by weakness)
+    function pickQuestion() {
+      const allItems = getAllItems();
+      
+      // Weight by weakness
+      const weighted = allItems.map(item => {
+        const record = getRecord(item.id);
+        let weight = 10; // Base weight
+        
+        if (record) {
+          const total = record.correct_count + record.wrong_count;
+          if (total > 0) {
+            const accuracy = record.correct_count / total;
+            weight = Math.max(1, Math.round((1 - accuracy) * 20));
+          }
+        }
+        
+        return { item, weight };
+      });
+      
+      // Weighted random selection
+      const totalWeight = weighted.reduce((sum, w) => sum + w.weight, 0);
+      let random = Math.random() * totalWeight;
+      
+      for (const { item, weight } of weighted) {
+        random -= weight;
+        if (random <= 0) return item;
+      }
+      
+      return weighted[0].item;
+    }
+
+    // Generate options
+    function generateOptions(correctPrep) {
+      const options = [correctPrep];
+      const otherPreps = allPreps.filter(p => p !== correctPrep);
+      
+      while (options.length < 6 && otherPreps.length > 0) {
+        const idx = Math.floor(Math.random() * otherPreps.length);
+        options.push(otherPreps.splice(idx, 1)[0]);
+      }
+      
+      // Shuffle
+      for (let i = options.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [options[i], options[j]] = [options[j], options[i]];
+      }
+      
+      return options;
+    }
+
+    // Show question
+    function showQuestion() {
+      isAnswered = false;
+      currentQuestion = pickQuestion();
+      const options = generateOptions(currentQuestion.prep);
+      
+      // Update UI
+      document.getElementById('prep-category').textContent = currentQuestion.hint;
+      document.getElementById('question-word').textContent = currentQuestion.word;
+      document.getElementById('question-hint').textContent = currentQuestion.meaning;
+      
+      document.getElementById('answer-word').textContent = `${currentQuestion.word} ${currentQuestion.prep}`;
+      document.getElementById('answer-prep').textContent = currentQuestion.prep;
+      document.getElementById('answer-meaning').textContent = currentQuestion.meaning;
+      
+      // Reset card
+      document.getElementById('quiz-card').classList.remove('flipped');
+      
+      // Render options
+      const optionsGrid = document.getElementById('options-grid');
+      optionsGrid.innerHTML = options.map(prep => `
+        <button class="prep-btn py-3 px-4 rounded-xl font-bold text-lg transition-all bg-slate-700 hover:bg-slate-600 text-white border-2 border-transparent"
+                data-prep="${prep}">
+          ${prep}
+        </button>
+      `).join('');
+      
+      // Add click handlers
+      optionsGrid.querySelectorAll('.prep-btn').forEach(btn => {
+        btn.addEventListener('click', () => handleAnswer(btn.dataset.prep));
+      });
+      
+      // Hide feedback and next button
+      document.getElementById('feedback').innerHTML = '';
+      document.getElementById('next-btn').classList.add('hidden');
+    }
+
+    // Handle answer
+    async function handleAnswer(selectedPrep) {
+      if (isAnswered) return;
+      isAnswered = true;
+      
+      const correct = selectedPrep === currentQuestion.prep;
+      totalAttempts++;
+      
+      if (correct) {
+        totalCorrect++;
+        streak++;
+      } else {
+        streak = 0;
+      }
+      
+      // Update UI
+      updateStats();
+      
+      // Highlight buttons
+      const buttons = document.querySelectorAll('.prep-btn');
+      buttons.forEach(btn => {
+        const prep = btn.dataset.prep;
+        if (prep === currentQuestion.prep) {
+          btn.classList.add('correct', 'bg-emerald-500', 'border-emerald-400');
+          btn.classList.remove('bg-slate-700');
+        } else if (prep === selectedPrep && !correct) {
+          btn.classList.add('wrong', 'bg-red-500', 'border-red-400');
+          btn.classList.remove('bg-slate-700');
+        }
+        btn.disabled = true;
+      });
+      
+      // Flip card if wrong
+      if (!correct) {
+        document.getElementById('quiz-card').classList.add('flipped');
+      }
+      
+      // Show feedback
+      const feedbackEl = document.getElementById('feedback');
+      if (correct) {
+        feedbackEl.innerHTML = `<span class="text-emerald-400 font-bold fade-in">✨ 正確！${streak >= 3 ? `🔥 連續 ${streak} 題！` : ''}</span>`;
+      } else {
+        feedbackEl.innerHTML = `<span class="text-red-400 font-bold fade-in">❌ 答案是 ${currentQuestion.prep}</span>`;
+      }
+      
+      // Show next button
+      document.getElementById('next-btn').classList.remove('hidden');
+      
+      // Save to Data SDK
+      await saveProgress(currentQuestion.id, correct);
+      
+      // Update mastery bars
+      renderMasteryBars();
+    }
+
+    // Save progress
+    async function saveProgress(itemId, correct) {
+      const existingRecord = getRecord(itemId);
+      
+      if (existingRecord) {
+        if (correct) {
+          existingRecord.correct_count++;
+        } else {
+          existingRecord.wrong_count++;
+        }
+        existingRecord.last_practiced = new Date().toISOString();
+        
+        const result = await window.dataSdk.update(existingRecord);
+        if (!result.isOk) {
+          console.error('Failed to update record');
+        }
+      } else {
+        if (practiceRecords.length >= 999) {
+          document.getElementById('feedback').innerHTML += '<br><span class="text-amber-400 text-xs">⚠️ 已達儲存上限</span>';
+          return;
+        }
+        
+        const newRecord = {
+          collocation_id: itemId,
+          correct_count: correct ? 1 : 0,
+          wrong_count: correct ? 0 : 1,
+          last_practiced: new Date().toISOString()
+        };
+        
+        const result = await window.dataSdk.create(newRecord);
+        if (!result.isOk) {
+          console.error('Failed to create record');
+        }
+      }
+    }
+
+    // Update stats display
+    function updateStats() {
+      document.getElementById('streak').textContent = streak;
+      document.getElementById('accuracy').textContent = totalAttempts > 0 
+        ? Math.round((totalCorrect / totalAttempts) * 100) + '%' 
+        : '0%';
+      document.getElementById('practiced').textContent = totalAttempts;
+    }
+
+    // Render mastery bars
+    function renderMasteryBars() {
+      const container = document.getElementById('mastery-bars');
+      container.innerHTML = allPreps.slice(0, 7).map(prep => {
+        const mastery = getPrepMastery(prep);
+        const color = mastery >= 80 ? 'bg-emerald-500' : mastery >= 50 ? 'bg-amber-500' : 'bg-slate-600';
+        
+        return `
+          <div class="flex items-center gap-2">
+            <span class="w-16 text-xs text-slate-400">${prep}</span>
+            <div class="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
+              <div class="${color} h-full rounded-full transition-all" style="width: ${mastery}%"></div>
+            </div>
+            <span class="w-10 text-xs text-slate-400 text-right">${mastery}%</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Render browse mode
+    function renderBrowseMode() {
+      // Render filters
+      const filtersContainer = document.getElementById('prep-filters');
+      filtersContainer.innerHTML = `
+        <button class="px-3 py-1 rounded-lg text-sm font-medium transition-all ${selectedPrepFilter === 'ALL' ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-300'}"
+                data-filter="ALL">全部</button>
+        ${allPreps.map(prep => `
+          <button class="px-3 py-1 rounded-lg text-sm font-medium transition-all ${selectedPrepFilter === prep ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-300'}"
+                  data-filter="${prep}">${prepData[prep].emoji} ${prep}</button>
+        `).join('')}
+      `;
+      
+      filtersContainer.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          selectedPrepFilter = btn.dataset.filter;
+          renderBrowseMode();
+        });
+      });
+      
+      // Render cards
+      const grid = document.getElementById('browse-grid');
+      const prepsToShow = selectedPrepFilter === 'ALL' ? allPreps : [selectedPrepFilter];
+      
+      grid.innerHTML = prepsToShow.map(prep => {
+        const data = prepData[prep];
+        return `
+          <div class="bg-slate-800/80 rounded-xl p-4 border border-slate-700">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-2xl">${data.emoji}</span>
+              <span class="font-bold text-amber-400 text-lg mono-font">${prep}</span>
+            </div>
+            <p class="text-xs text-slate-400 mb-3">${data.hint}</p>
+            <div class="space-y-2">
+              ${data.items.map(item => {
+                const record = getRecord(item.id);
+                const practiced = record && (record.correct_count + record.wrong_count) > 0;
+                const accuracy = record ? Math.round((record.correct_count / (record.correct_count + record.wrong_count)) * 100) : 0;
+                
+                return `
+                  <div class="flex justify-between items-center py-1 border-b border-slate-700/50 last:border-0">
+                    <div>
+                      <span class="text-white">${item.word}</span>
+                      <span class="text-amber-400 mono-font font-bold ml-1">${prep}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span class="text-slate-400 text-sm">${item.meaning}</span>
+                      ${practiced ? `<span class="text-xs px-2 py-0.5 rounded-full ${accuracy >= 80 ? 'bg-emerald-500/20 text-emerald-400' : accuracy >= 50 ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'}">${accuracy}%</span>` : ''}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Mode switching
+    function setupModeTabs() {
+      document.getElementById('mode-quiz').addEventListener('click', () => {
+        currentMode = 'quiz';
+        document.getElementById('mode-quiz').classList.replace('bg-slate-700', 'bg-amber-500');
+        document.getElementById('mode-quiz').classList.replace('text-slate-300', 'text-slate-900');
+        document.getElementById('mode-browse').classList.replace('bg-amber-500', 'bg-slate-700');
+        document.getElementById('mode-browse').classList.replace('text-slate-900', 'text-slate-300');
+        document.getElementById('quiz-section').classList.remove('hidden');
+        document.getElementById('browse-section').classList.add('hidden');
+      });
+      
+      document.getElementById('mode-browse').addEventListener('click', () => {
+        currentMode = 'browse';
+        document.getElementById('mode-browse').classList.replace('bg-slate-700', 'bg-amber-500');
+        document.getElementById('mode-browse').classList.replace('text-slate-300', 'text-slate-900');
+        document.getElementById('mode-quiz').classList.replace('bg-amber-500', 'bg-slate-700');
+        document.getElementById('mode-quiz').classList.replace('text-slate-900', 'text-slate-300');
+        document.getElementById('browse-section').classList.remove('hidden');
+        document.getElementById('quiz-section').classList.add('hidden');
+        renderBrowseMode();
+      });
+    }
+
+    // Data handler
+    const dataHandler = {
+      onDataChanged(data) {
+        practiceRecords = data;
+        renderMasteryBars();
+        if (currentMode === 'browse') {
+          renderBrowseMode();
+        }
+      }
+    };
+
+    // Element SDK
+    async function onConfigChange(config) {
+      const title = config.app_title || defaultConfig.app_title;
+      document.getElementById('app-title').textContent = title;
+      
+      // Apply colors
+      const bg = config.background_color || defaultConfig.background_color;
+      const surface = config.surface_color || defaultConfig.surface_color;
+      const text = config.text_color || defaultConfig.text_color;
+      const primary = config.primary_action_color || defaultConfig.primary_action_color;
+      const secondary = config.secondary_action_color || defaultConfig.secondary_action_color;
+      
+      document.body.style.background = `linear-gradient(to bottom right, ${bg}, ${surface}, ${bg})`;
+      document.body.style.color = text;
+      
+      // Update primary buttons
+      document.querySelectorAll('.bg-amber-500').forEach(el => {
+        el.style.backgroundColor = primary;
+      });
+      
+      // Update secondary elements
+      document.querySelectorAll('.bg-slate-700').forEach(el => {
+        el.style.backgroundColor = secondary;
+      });
+    }
+
+    // Init
+    async function init() {
+      // Init Element SDK
+      if (window.elementSdk) {
+        await window.elementSdk.init({
+          defaultConfig,
+          onConfigChange,
+          mapToCapabilities: (config) => ({
+            recolorables: [
+              {
+                get: () => config.background_color || defaultConfig.background_color,
+                set: (v) => { config.background_color = v; window.elementSdk.setConfig({ background_color: v }); }
+              },
+              {
+                get: () => config.surface_color || defaultConfig.surface_color,
+                set: (v) => { config.surface_color = v; window.elementSdk.setConfig({ surface_color: v }); }
+              },
+              {
+                get: () => config.text_color || defaultConfig.text_color,
+                set: (v) => { config.text_color = v; window.elementSdk.setConfig({ text_color: v }); }
+              },
+              {
+                get: () => config.primary_action_color || defaultConfig.primary_action_color,
+                set: (v) => { config.primary_action_color = v; window.elementSdk.setConfig({ primary_action_color: v }); }
+              },
+              {
+                get: () => config.secondary_action_color || defaultConfig.secondary_action_color,
+                set: (v) => { config.secondary_action_color = v; window.elementSdk.setConfig({ secondary_action_color: v }); }
+              }
+            ],
+            borderables: [],
+            fontEditable: undefined,
+            fontSizeable: undefined
+          }),
+          mapToEditPanelValues: (config) => new Map([
+            ['app_title', config.app_title || defaultConfig.app_title]
+          ])
+        });
+      }
+      
+      // Init Data SDK
+      if (window.dataSdk) {
+        const result = await window.dataSdk.init(dataHandler);
+        if (!result.isOk) {
+          console.error('Failed to init Data SDK');
+        }
+      }
+      
+      // Setup
+      setupModeTabs();
+      showQuestion();
+      renderMasteryBars();
+      
+      // Next button
+      document.getElementById('next-btn').addEventListener('click', showQuestion);
+    }
+
+    init();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9bdb5f4eb018f251',t:'MTc2ODM3NTI0Mi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
